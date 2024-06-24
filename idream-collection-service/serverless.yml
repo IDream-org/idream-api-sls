@@ -1,0 +1,81 @@
+service: idream-collections-service
+
+custom:
+  authorizer: arn:aws:lambda:${aws:region}:${aws:accountId}:function:idream-auth-service-${self:provider.stage}-auth
+  tableName: "idream-collections-table-${sls:stage}"
+
+plugins:
+  - serverless-plugin-typescript
+  - serverless-offline
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  region: "us-east-1"
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - Fn::GetAtt: [IDreamCollectionsTable, Arn]
+  environment:
+    COLLECTIONS_TABLE: ${self:custom.tableName}
+
+functions:
+  getCollectionsByUserId:
+    handler: app/handler.getCollectionsByUserId
+    events:
+      - http:
+          path: collections
+          method: GET
+          authorizer: ${self:custom.authorizer}
+          cors: true
+  createCollection:
+    handler: app/handler.createCollection
+    events:
+      - http:
+          path: collections
+          method: POST
+          authorizer: ${self:custom.authorizer}
+          cors: true
+  deleteCollectionById:
+    handler: app/handler.deleteCollectionById
+    events:
+      - http:
+          path: collections/{id}
+          method: DELETE
+          authorizer: ${self:custom.authorizer}
+          cors: true
+
+resources:
+  Resources:
+    IDreamCollectionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: authorId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: author
+            KeySchema:
+              - AttributeName: authorId
+                KeyType: HASH
+            Projection:
+              ProjectionType: "ALL"
+
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${self:custom.tableName}
