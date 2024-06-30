@@ -1,0 +1,62 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_DEFAULT_REGION = 'us-east-1'
+        SLS_STAGE = 'prod'
+        NODEJS_VERSION = 'nodejs12'
+    }
+
+    stages {
+        stage('Install Dependencies') {
+            steps {
+                script {
+                    def nodejs = tool name: 'NodeJS', type: 'NodeJSInstallation'
+                    env.PATH = "${nodejs}/bin:${env.PATH}"
+                    
+                    sh 'npm install -g serverless'
+                    
+                    sh 'npm install'
+                }
+            }
+        }
+
+        stage('Lint') {
+            steps {
+                script {
+                    sh 'npm run lint'
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                script {
+                    sh 'npm test'
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                withAWS(credentials: 'aws-credentials-id', region: "$AWS_DEFAULT_REGION") {
+                    script {
+                        sh 'serverless deploy --stage $SLS_STAGE'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo 'Deployment succeeded!'
+        }
+        failure {
+            echo 'Deployment failed!'
+        }
+    }
+}
